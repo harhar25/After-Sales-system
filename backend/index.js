@@ -21,6 +21,7 @@ app.use(require('./routes/foremanRoutes'));
 app.use(require('./routes/cashierRoutes'));
 app.use(require('./routes/securityRoutes'));
 app.use(require('./routes/generalRoutes'));
+app.use(require('./routes/jockeyRoutes'));
 
 const PORT = process.env.PORT || 5000;
 

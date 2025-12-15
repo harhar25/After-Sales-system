@@ -129,39 +129,9 @@ export const getQCCompletionStatus = (serviceOrderId) => api.get(`/foreman/servi
 // Legacy Foreman APIs (backward compatibility)
 export const qualityCheck = (id, data) => api.put(`/foreman/service-orders/${id}/qc`, data);
 
-// Cashier APIs - Payment Processing Module
-// Get service orders ready for payment
+// Cashier APIs
 export const getCashierServiceOrders = () => api.get('/cashier/service-orders');
-
-// Get billing details for a service order
-export const getCashierBillingDetails = (serviceOrderId) => 
-  api.get(`/cashier/service-orders/${serviceOrderId}/billing`);
-
-// Process payment for service order
-export const processPayment = (serviceOrderId, paymentData) => 
-  api.post(`/cashier/service-orders/${serviceOrderId}/payment`, paymentData);
-
-// Create and sign gatepass
-export const createAndSignGatepass = (serviceOrderId, gatepassData) => 
-  api.post(`/cashier/service-orders/${serviceOrderId}/gatepass`, gatepassData);
-
-// Return documents to Service Advisor
-export const returnDocumentsToSA = (serviceOrderId) => 
-  api.put(`/cashier/service-orders/${serviceOrderId}/return-to-sa`);
-
-// Get payment history for service order
-export const getPaymentHistory = (serviceOrderId) => 
-  api.get(`/cashier/service-orders/${serviceOrderId}/payments`);
-
-// Generate receipt for payment
-export const generateReceipt = (paymentId) => 
-  api.post(`/cashier/payments/${paymentId}/receipt`);
-
-// Process refund for payment
-export const processRefund = (paymentId, refundData) => 
-  api.post(`/cashier/payments/${paymentId}/refund`, refundData);
-
-// Legacy cashier APIs (for backward compatibility)
+export const processPayment = (id, data) => api.put(`/cashier/service-orders/${id}/payment`, data);
 export const signGatepass = (id) => api.put(`/cashier/service-orders/${id}/gatepass`);
 
 // Job Controller APIs
@@ -186,42 +156,5 @@ export const completeTask = (taskId, data) => api.put(`/jockey/tasks/${taskId}/c
 export const logVehicleMovement = (transferId, data) => api.put(`/jockey/vehicle-movements/${transferId}/log`, data);
 export const manageKey = (taskId, data) => api.put(`/jockey/tasks/${taskId}/manage-key`, data);
 export const getTaskHistory = (page = 1) => api.get('/jockey/task-history', { params: { page } });
-
-// 10. Final Release - Service Advisor APIs
-// 10.1 Request Manager Approval for Gatepass
-export const requestManagerApproval = (serviceOrderId, approvalData) => 
-  api.post(`/sa/service-orders/${serviceOrderId}/request-manager-approval`, approvalData);
-
-// 10.2 Transfer Documents to Billing Clerk
-export const transferDocumentsToBilling = (serviceOrderId, transferData) => 
-  api.put(`/sa/service-orders/${serviceOrderId}/transfer-documents`, transferData);
-
-// 10.3 Transfer Gatepass to Security
-export const transferGatepassToSecurity = (serviceOrderId, transferData) => 
-  api.put(`/sa/service-orders/${serviceOrderId}/transfer-gatepass`, transferData);
-
-// 10.4 Request Car Jockey for Final Drive-out
-export const requestCarJockey = (serviceOrderId, jockeyData) => 
-  api.post(`/sa/service-orders/${serviceOrderId}/request-car-jockey`, jockeyData);
-
-// Get Final Release Status
-export const getFinalReleaseStatus = (serviceOrderId) => 
-  api.get(`/sa/service-orders/${serviceOrderId}/final-release-status`);
-
-// 11. Security Gate Validation APIs
-export const scanGatepass = (gatepassNumber) => 
-  api.post('/security/scan', { gatepassNumber });
-
-export const validateSignature = (gatepassId, signatureType) => 
-  api.post(`/security/gatepass/${gatepassId}/validate-signature`, { signatureType });
-
-export const releaseVehicle = (gatepassId) => 
-  api.post(`/security/gatepass/${gatepassId}/release`);
-
-export const getGatepassValidationStatus = (gatepassId) => 
-  api.get(`/security/gatepass/${gatepassId}/status`);
-
-export const getPendingGatepasses = () => 
-  api.get('/security/pending-gatepasses');
 
 export default api;

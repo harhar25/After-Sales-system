@@ -259,3 +259,84 @@ exports.completeAssignment = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Return completed service order to Service Advisor
+exports.returnCompletedServiceOrder = async (req, res) => {
+  try {
+    const { serviceOrderId } = req.params;
+    const { completionNotes } = req.body;
+    
+    // Find the service order
+    const serviceOrder = await ServiceOrder.findById(serviceOrderId)
+      .populate('customerId vehicleId technicianId');
+    
+    if (!serviceOrder) {
+      return res.status(404).json({ message: 'Service Order not found' });
+    }
+    
+    // Check if service order is assigned and completed
+    if (!serviceOrder.technicianId) {
+      return res.status(400).json({ message: 'Service Order is not assigned to any technician' });
+    }
+    
+    // Find the completed assignment
+    const assignment = await TechnicianAssignment.findOne({
+      serviceOrderId,
+      technicianId: serviceOrder.technicianId,
+      status: 'Completed'
+    }).populate('laborTrackingId');
+    
+    if (!assignment) {
+      return res.status(400).json({ message: 'No completed assignment found for this service order' });
+    }
+    
+    // Update service order status to Quality Check (ready for SA review)
+    serviceOrder.status = 'Quality Check';
+    
+    // Log total labor hours from completed assignment
+    const totalLaborHours = assignment.actualHours || assignment.laborTrackingId?.totalWorkedHours || 0;
+    serviceOrder.laborHours = totalLaborHours;
+    
+    // Add completion notes if provided
+    if (completionNotes) {
+      serviceOrder.completionNotes = completionNotes;
+    }
+    
+    await serviceOrder.save();
+    
+    res.json({
+      serviceOrder,
+      assignment,
+      totalLaborHours,
+      message: 'Service Order returned to Service Advisor successfully'
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get completed assignments ready for wrap-up
+exports.getCompletedAssignments = async (req, res) => {
+  try {
+    const assignments = await TechnicianAssignment.find({ 
+      status: 'Completed' 
+    })
+      .populate({
+        path: 'serviceOrderId',
+        populate: ['customerId', 'vehicleId']
+      })
+      .populate('technicianId')
+      .populate('laborTrackingId')
+      .populate('assignedBy');
+    
+    // Filter assignments where service order is not yet returned to SA
+    const readyForWrapUp = assignments.filter(assignment => 
+      assignment.serviceOrderId && 
+      assignment.serviceOrderId.status !== 'Quality Check'
+    );
+    
+    res.json(readyForWrapUp);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

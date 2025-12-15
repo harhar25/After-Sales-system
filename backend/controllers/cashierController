@@ -1,0 +1,396 @@
+const ServiceOrder = require('../models/ServiceOrder');
+const Billing = require('../models/Billing');
+const Payment = require('../models/Payment');
+const Gatepass = require('../models/Gatepass');
+const Customer = require('../models/Customer');
+const Vehicle = require('../models/Vehicle');
+
+// Get Service Orders ready for payment
+exports.getServiceOrdersForPayment = async (req, res) => {
+  try {
+    const serviceOrders = await ServiceOrder.find({ 
+      status: 'Completed' 
+    })
+    .populate('customerId', 'name contactNumber email')
+    .populate('vehicleId', 'plateNumber model color')
+    .populate('vehicleReportCardId')
+    .sort({ updatedAt: -1 });
+    
+    res.json(serviceOrders);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get billing details for a service order
+exports.getBillingDetails = async (req, res) => {
+  try {
+    const { serviceOrderId } = req.params;
+    
+    const billing = await Billing.findOne({ 
+      serviceOrderId,
+      status: { $in: ['Generated', 'For Payment'] }
+    })
+    .populate('lineItems')
+    .populate('customerId', 'name contactNumber email')
+    .populate('vehicleId', 'plateNumber model color')
+    .populate('advisorId', 'name');
+    
+    if (!billing) {
+      return res.status(404).json({ message: 'Billing not found for this service order' });
+    }
+    
+    res.json(billing);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Process payment for service order
+exports.processPayment = async (req, res) => {
+  try {
+    const { serviceOrderId } = req.params;
+    const { 
+      paymentMethod, 
+      amount,
+      amountReceived,
+      // Card details
+      cardNumber,
+      cardType,
+      expiryDate,
+      authorizationCode,
+      // Online details
+      transactionId,
+      gateway,
+      referenceNumber,
+      // Check details
+      checkNumber,
+      bankName,
+      accountNumber,
+      routingNumber,
+      // Corporate details
+      companyName,
+      accountNumber: corporateAccountNumber,
+      purchaseOrderNumber,
+      creditLimit,
+      approvalCode,
+      // Government details
+      agencyName,
+      department,
+      budgetCode,
+      authorizationNumber,
+      cashierNotes
+    } = req.body;
+    
+    const cashierId = req.user.id;
+    
+    // Get service order and billing
+    const serviceOrder = await ServiceOrder.findById(serviceOrderId);
+    if (!serviceOrder) {
+      return res.status(404).json({ message: 'Service Order not found' });
+    }
+    
+    const billing = await Billing.findOne({ serviceOrderId });
+    if (!billing) {
+      return res.status(404).json({ message: 'Billing not found for this service order' });
+    }
+    
+    // Determine payment status based on method
+    let paymentStatus = 'Completed';
+    let serviceOrderStatus = 'Paid';
+    
+    if (paymentMethod === 'Corporate Account' || paymentMethod === 'Government Account') {
+      paymentStatus = 'Charge Account Pending';
+      serviceOrderStatus = 'Charge Account Pending';
+    }
+    
+    // Create payment record
+    const payment = new Payment({
+      serviceOrderId,
+      billingId: billing._id,
+      cashierId,
+      amount,
+      paymentMethod,
+      status: paymentStatus,
+      amountReceived,
+      cashierNotes
+    });
+    
+    // Add method-specific details
+    if (paymentMethod === 'Card' && cardNumber) {
+      payment.cardDetails = {
+        cardNumber: cardNumber.slice(-4), // Store only last 4 digits
+        cardType,
+        expiryDate,
+        authorizationCode
+      };
+    } else if (paymentMethod === 'Online') {
+      payment.onlineDetails = {
+        transactionId,
+        gateway,
+        referenceNumber
+      };
+    } else if (paymentMethod === 'Check') {
+      payment.checkDetails = {
+        checkNumber,
+        bankName,
+        accountNumber: accountNumber ? accountNumber.slice(-4) : '',
+        routingNumber: routingNumber ? routingNumber.slice(-4) : ''
+      };
+    } else if (paymentMethod === 'Corporate Account') {
+      payment.corporateDetails = {
+        companyName,
+        accountNumber: corporateAccountNumber,
+        purchaseOrderNumber,
+        creditLimit,
+        approvalCode
+      };
+    } else if (paymentMethod === 'Government Account') {
+      payment.governmentDetails = {
+        agencyName,
+        department,
+        budgetCode,
+        authorizationNumber
+      };
+    }
+    
+    await payment.save();
+    
+    // Update billing status
+    billing.status = paymentStatus === 'Charge Account Pending' ? 'For Payment' : 'Paid';
+    billing.paymentDate = new Date();
+    billing.cashierId = cashierId;
+    billing.paymentMethod = paymentMethod;
+    billing.paymentReference = payment.paymentNumber;
+    await billing.save();
+    
+    // Update service order status
+    serviceOrder.status = serviceOrderStatus;
+    await serviceOrder.save();
+    
+    res.json({
+      success: true,
+      payment,
+      billing,
+      serviceOrder,
+      message: 'Payment processed successfully'
+    });
+    
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Create and sign gatepass
+exports.createAndSignGatepass = async (req, res) => {
+  try {
+    const { serviceOrderId } = req.params;
+    const { signatureData, additionalServices, specialInstructions } = req.body;
+    
+    const cashierId = req.user.id;
+    
+    // Get service order with populated data
+    const serviceOrder = await ServiceOrder.findById(serviceOrderId)
+      .populate('customerId')
+      .populate('vehicleId')
+      .populate('vehicleReportCardId');
+    
+    if (!serviceOrder) {
+      return res.status(404).json({ message: 'Service Order not found' });
+    }
+    
+    const billing = await Billing.findOne({ serviceOrderId });
+    
+    // Check if gatepass already exists
+    let gatepass = await Gatepass.findOne({ serviceOrderId });
+    
+    if (!gatepass) {
+      // Create new gatepass
+      gatepass = new Gatepass({
+        serviceOrderId,
+        billingId: billing ? billing._id : null,
+        vehicleId: serviceOrder.vehicleId._id,
+        vehiclePlateNumber: serviceOrder.vehicleId.plateNumber,
+        vehicleModel: serviceOrder.vehicleId.model,
+        vehicleColor: serviceOrder.vehicleId.color,
+        customerId: serviceOrder.customerId._id,
+        customerName: serviceOrder.customerId.name,
+        customerContact: serviceOrder.customerId.contactNumber,
+        serviceAdvisorId: serviceOrder.vehicleReportCardId?.advisorId || req.user.id,
+        technicianId: serviceOrder.technicianId,
+        totalAmount: billing ? billing.totalAmount : serviceOrder.totalCost,
+        paymentStatus: serviceOrder.status,
+        paymentMethod: billing?.paymentMethod,
+        paymentReference: billing?.paymentReference,
+        additionalServices,
+        specialInstructions,
+        createdBy: cashierId
+      });
+    }
+    
+    // Add cashier signature
+    gatepass.cashierSignature = {
+      cashierId,
+      cashierName: req.user.name,
+      signatureData,
+      signedAt: new Date()
+    };
+    
+    // Update document status
+    gatepass.documentStatus = 'Signed';
+    gatepass.lastModifiedBy = cashierId;
+    gatepass.lastModifiedAt = new Date();
+    
+    await gatepass.save();
+    
+    res.json({
+      success: true,
+      gatepass,
+      message: 'Gatepass created and signed successfully'
+    });
+    
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Return documents to Service Advisor
+exports.returnDocumentsToSA = async (req, res) => {
+  try {
+    const { serviceOrderId } = req.params;
+    
+    // Update service order to indicate documents returned
+    const serviceOrder = await ServiceOrder.findByIdAndUpdate(
+      serviceOrderId,
+      { 
+        status: 'Documents Returned',
+        documentLogs: [] // Clear document logs as they are returned
+      },
+      { new: true }
+    );
+    
+    if (!serviceOrder) {
+      return res.status(404).json({ message: 'Service Order not found' });
+    }
+    
+    // Update gatepass if exists
+    await Gatepass.findOneAndUpdate(
+      { serviceOrderId },
+      { 
+        returnedToSA: true,
+        returnedAt: new Date(),
+        saAcknowledgment: {
+          acknowledgedBy: req.user.id,
+          acknowledgedAt: new Date()
+        }
+      }
+    );
+    
+    res.json({
+      success: true,
+      serviceOrder,
+      message: 'Documents returned to Service Advisor successfully'
+    });
+    
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get payment history
+exports.getPaymentHistory = async (req, res) => {
+  try {
+    const { serviceOrderId } = req.params;
+    
+    const payments = await Payment.find({ serviceOrderId })
+      .populate('cashierId', 'name')
+      .sort({ paymentDate: -1 });
+    
+    res.json(payments);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Generate receipt
+exports.generateReceipt = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    
+    const payment = await Payment.findById(paymentId)
+      .populate('serviceOrderId')
+      .populate('billingId')
+      .populate('cashierId', 'name');
+    
+    if (!payment) {
+      return res.status(404).json({ message: 'Payment not found' });
+    }
+    
+    // Update receipt information
+    payment.receiptGenerated = true;
+    payment.receiptGeneratedAt = new Date();
+    payment.receiptNumber = `RCP-${payment.paymentNumber}`;
+    
+    await payment.save();
+    
+    res.json({
+      success: true,
+      payment,
+      message: 'Receipt generated successfully'
+    });
+    
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Process refund
+exports.processRefund = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const { refundAmount, refundReason } = req.body;
+    
+    const payment = await Payment.findById(paymentId);
+    
+    if (!payment) {
+      return res.status(404).json({ message: 'Payment not found' });
+    }
+    
+    if (payment.status === 'Refunded') {
+      return res.status(400).json({ message: 'Payment already refunded' });
+    }
+    
+    // Update payment with refund information
+    payment.refundAmount = refundAmount;
+    payment.refundReason = refundReason;
+    payment.refundDate = new Date();
+    payment.refundProcessedBy = req.user.id;
+    payment.status = 'Refunded';
+    
+    await payment.save();
+    
+    // Update related records
+    await ServiceOrder.findByIdAndUpdate(payment.serviceOrderId, { status: 'Refunded' });
+    await Billing.findByIdAndUpdate(payment.billingId, { status: 'Cancelled' });
+    
+    res.json({
+      success: true,
+      payment,
+      message: 'Refund processed successfully'
+    });
+    
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Legacy payment function for backward compatibility
+exports.paymentServiceOrder = async (req, res) => {
+  try {
+    const so = await ServiceOrder.findByIdAndUpdate(req.params.id, { status: 'Paid' }, { new: true });
+    if (!so) return res.status(404).json({ message: 'Service Order not found' });
+    res.json(so);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

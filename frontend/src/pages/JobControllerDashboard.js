@@ -7,17 +7,21 @@ import {
   clockOutTechnician,
   getTechnicianAssignments,
   getLaborTracking,
-  completeAssignment
+  completeAssignment,
+  getCompletedAssignments,
+  returnCompletedServiceOrder
 } from '../services/api';
 
 const JobControllerDashboard = ({ token }) => {
   const [activeServiceOrders, setActiveServiceOrders] = useState([]);
   const [availableTechnicians, setAvailableTechnicians] = useState([]);
   const [technicianAssignments, setTechnicianAssignments] = useState([]);
+  const [completedAssignments, setCompletedAssignments] = useState([]);
   const [selectedServiceOrder, setSelectedServiceOrder] = useState(null);
   const [selectedTechnician, setSelectedTechnician] = useState(null);
   const [estimatedHours, setEstimatedHours] = useState('');
   const [assignmentNotes, setAssignmentNotes] = useState('');
+  const [completionNotes, setCompletionNotes] = useState('');
   const [activeTab, setActiveTab] = useState('assignment');
   const [loading, setLoading] = useState(false);
   const [clockInTime, setClockInTime] = useState(null);
@@ -27,6 +31,7 @@ const JobControllerDashboard = ({ token }) => {
     fetchActiveServiceOrders();
     fetchAvailableTechnicians();
     fetchTechnicianAssignments();
+    fetchCompletedAssignments();
   }, []);
 
   const fetchActiveServiceOrders = async () => {
@@ -56,6 +61,15 @@ const JobControllerDashboard = ({ token }) => {
       setTechnicianAssignments(response.data);
     } catch (err) {
       console.error('Error fetching technician assignments:', err);
+    }
+  };
+
+  const fetchCompletedAssignments = async () => {
+    try {
+      const response = await getCompletedAssignments();
+      setCompletedAssignments(response.data);
+    } catch (err) {
+      console.error('Error fetching completed assignments:', err);
     }
   };
 
@@ -135,10 +149,35 @@ const JobControllerDashboard = ({ token }) => {
       await completeAssignment(assignmentId);
       await fetchTechnicianAssignments();
       await fetchAvailableTechnicians();
+      await fetchCompletedAssignments();
       alert('Assignment completed successfully!');
     } catch (err) {
       console.error('Error completing assignment:', err);
       alert('Error completing assignment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReturnToServiceAdvisor = async (serviceOrderId) => {
+    try {
+      setLoading(true);
+      const returnData = {
+        completionNotes: completionNotes
+      };
+      
+      await returnCompletedServiceOrder(serviceOrderId, returnData);
+      
+      // Reset form
+      setCompletionNotes('');
+      
+      // Refresh data
+      await fetchCompletedAssignments();
+      
+      alert('Service Order returned to Service Advisor successfully!');
+    } catch (err) {
+      console.error('Error returning to Service Advisor:', err);
+      alert('Error returning Service Order to Service Advisor');
     } finally {
       setLoading(false);
     }
@@ -329,6 +368,83 @@ const JobControllerDashboard = ({ token }) => {
     </div>
   );
 
+  const renderWrapUpTab = () => (
+    <div className="tab-pane active">
+      <h3>6. Job Controller Wrap-Up</h3>
+      <p className="text-muted">Return completed Service Orders to Service Advisor with total labor hours logged.</p>
+      
+      {completedAssignments.length === 0 ? (
+        <div className="alert alert-info">
+          No completed assignments ready for wrap-up.
+        </div>
+      ) : (
+        <div className="row">
+          {completedAssignments.map(assignment => (
+            <div key={assignment._id} className="col-md-12">
+              <div className="card mt-3">
+                <div className="card-body">
+                  <h5>Service Order: {assignment.serviceOrderId?._id}</h5>
+                  <div className="row">
+                    <div className="col-md-6">
+                      <p><strong>Customer:</strong> {assignment.serviceOrderId?.customerId?.name}</p>
+                      <p><strong>Vehicle:</strong> {assignment.serviceOrderId?.vehicleId?.plateNo}</p>
+                      <p><strong>Technician:</strong> {assignment.technicianId?.name}</p>
+                      <p><strong>Estimated Hours:</strong> {assignment.estimatedHours}</p>
+                    </div>
+                    <div className="col-md-6">
+                      <p><strong>Actual Hours Worked:</strong> {assignment.actualHours || assignment.laborTrackingId?.totalWorkedHours || 0}</p>
+                      <p><strong>Assignment Status:</strong> <span className="badge badge-success">{assignment.status}</span></p>
+                      <p><strong>Service Order Status:</strong> <span className="badge badge-warning">{assignment.serviceOrderId?.status}</span></p>
+                      
+                      {assignment.laborTrackingId?.workPerformed && assignment.laborTrackingId.workPerformed.length > 0 && (
+                        <div>
+                          <strong>Work Performed:</strong>
+                          <ul>
+                            {assignment.laborTrackingId.workPerformed.map((work, index) => (
+                              <li key={index}>{work}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="wrap-up-form mt-3">
+                    <div className="form-group">
+                      <label>Completion Notes:</label>
+                      <textarea
+                        className="form-control"
+                        placeholder="Enter completion notes for Service Advisor"
+                        value={completionNotes}
+                        onChange={(e) => setCompletionNotes(e.target.value)}
+                        rows="3"
+                      />
+                    </div>
+                    
+                    <button
+                      className="btn btn-success"
+                      onClick={() => handleReturnToServiceAdvisor(assignment.serviceOrderId?._id)}
+                      disabled={loading || !completionNotes.trim()}
+                    >
+                      <i className="fas fa-paper-plane mr-2"></i>
+                      Return to Service Advisor
+                    </button>
+                    
+                    <div className="mt-2">
+                      <small className="text-muted">
+                        This will log total labor hours ({assignment.actualHours || assignment.laborTrackingId?.totalWorkedHours || 0}) and return the Service Order for Quality Check.
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="container mt-4">
       <h1>Job Controller Dashboard - Technician Assignment Module</h1>
@@ -350,11 +466,23 @@ const JobControllerDashboard = ({ token }) => {
             Labor Tracking
           </button>
         </li>
+        <li className="nav-item">
+          <button
+            className={`nav-link ${activeTab === 'wrapup' ? 'active' : ''}`}
+            onClick={() => setActiveTab('wrapup')}
+          >
+            6. Job Controller Wrap-Up
+            {completedAssignments.length > 0 && (
+              <span className="badge badge-danger ml-2">{completedAssignments.length}</span>
+            )}
+          </button>
+        </li>
       </ul>
 
       <div className="tab-content mt-3">
         {activeTab === 'assignment' && renderAssignmentTab()}
         {activeTab === 'tracking' && renderLaborTrackingTab()}
+        {activeTab === 'wrapup' && renderWrapUpTab()}
       </div>
 
       {loading && (

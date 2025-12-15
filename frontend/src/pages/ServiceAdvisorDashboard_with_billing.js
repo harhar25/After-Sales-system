@@ -14,14 +14,7 @@ import {
   generateBilling,
   getBillingDetails,
   printServiceBilling,
-  markForPayment,
-  
-  // 10. Final Release - Service Advisor APIs
-  requestManagerApproval,
-  transferDocumentsToBilling,
-  transferGatepassToSecurity,
-  requestCarJockey,
-  getFinalReleaseStatus
+  markForPayment
 } from '../services/api';
 
 const ServiceAdvisorDashboard = ({ token }) => {
@@ -38,20 +31,6 @@ const ServiceAdvisorDashboard = ({ token }) => {
     warrantyDeduction: 0
   });
   const [currentBilling, setCurrentBilling] = useState(null);
-  const [finalReleaseStatus, setFinalReleaseStatus] = useState(null);
-  const [approvalData, setApprovalData] = useState({
-    requestReason: '',
-    requestDetails: '',
-    requestPriority: 'Medium'
-  });
-  const [transferData, setTransferData] = useState({
-    documentsTransferred: [],
-    transferNotes: ''
-  });
-  const [jockeyData, setJockeyData] = useState({
-    jockeyInstructions: '',
-    estimatedPickupTime: ''
-  });
   const [vrcData, setVrcData] = useState({
     checklistItems: [
       { item: 'Engine Oil Level', status: '', notes: '' },
@@ -280,75 +259,6 @@ const ServiceAdvisorDashboard = ({ token }) => {
       alert('Error marking for payment');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // 10. Final Release - Service Advisor handlers
-  const handleRequestManagerApproval = async (serviceOrderId) => {
-    try {
-      setLoading(true);
-      await requestManagerApproval(serviceOrderId, approvalData);
-      await fetchFinalReleaseStatus(serviceOrderId);
-      alert('Manager approval requested successfully!');
-    } catch (err) {
-      console.error('Error requesting manager approval:', err);
-      alert('Error requesting manager approval');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTransferDocumentsToBilling = async (serviceOrderId) => {
-    try {
-      setLoading(true);
-      await transferDocumentsToBilling(serviceOrderId, transferData);
-      await fetchFinalReleaseStatus(serviceOrderId);
-      alert('Documents transferred to Billing Clerk successfully!');
-    } catch (err) {
-      console.error('Error transferring documents:', err);
-      alert('Error transferring documents');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTransferGatepassToSecurity = async (serviceOrderId, gatepassId) => {
-    try {
-      setLoading(true);
-      await transferGatepassToSecurity(serviceOrderId, {
-        gatepassId,
-        transferNotes: transferData.transferNotes
-      });
-      await fetchFinalReleaseStatus(serviceOrderId);
-      alert('Gatepass transferred to Security successfully!');
-    } catch (err) {
-      console.error('Error transferring gatepass:', err);
-      alert('Error transferring gatepass');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRequestCarJockey = async (serviceOrderId) => {
-    try {
-      setLoading(true);
-      await requestCarJockey(serviceOrderId, jockeyData);
-      await fetchFinalReleaseStatus(serviceOrderId);
-      alert('Car jockey requested successfully!');
-    } catch (err) {
-      console.error('Error requesting car jockey:', err);
-      alert('Error requesting car jockey');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchFinalReleaseStatus = async (serviceOrderId) => {
-    try {
-      const response = await getFinalReleaseStatus(serviceOrderId);
-      setFinalReleaseStatus(response.data);
-    } catch (err) {
-      console.error('Error fetching final release status:', err);
     }
   };
 
@@ -780,263 +690,6 @@ const ServiceAdvisorDashboard = ({ token }) => {
     </div>
   );
 
-  const renderFinalReleaseTab = () => (
-    <div className="tab-pane active">
-      <h3>10. Final Release - Service Advisor</h3>
-      
-      {/* 10.1 Request Manager Approval for Gatepass */}
-      <div className="row mt-4">
-        <div className="col-md-12">
-          <h5>10.1 Request Manager Approval for Gatepass</h5>
-          <p>Request manager approval for gatepass release (system-logged)</p>
-          
-          {serviceOrders.filter(order => order.status === 'For Payment').map(order => (
-            <div key={order._id} className="card mt-3">
-              <div className="card-body">
-                <h6>Service Order: {order._id}</h6>
-                <p>Customer: {order.customerId?.name}</p>
-                <p>Vehicle: {order.vehicleId?.plateNo}</p>
-                <p>Status: {order.status}</p>
-                
-                <div className="form-group">
-                  <label>Request Reason:</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Reason for gatepass approval"
-                    value={approvalData.requestReason}
-                    onChange={(e) => setApprovalData({
-                      ...approvalData,
-                      requestReason: e.target.value
-                    })}
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Request Details:</label>
-                  <textarea
-                    className="form-control"
-                    placeholder="Additional details"
-                    value={approvalData.requestDetails}
-                    onChange={(e) => setApprovalData({
-                      ...approvalData,
-                      requestDetails: e.target.value
-                    })}
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Priority:</label>
-                  <select
-                    className="form-control"
-                    value={approvalData.requestPriority}
-                    onChange={(e) => setApprovalData({
-                      ...approvalData,
-                      requestPriority: e.target.value
-                    })}
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Urgent">Urgent</option>
-                  </select>
-                </div>
-                
-                <button
-                  className="btn btn-primary"
-                  onClick={() => handleRequestManagerApproval(order._id)}
-                  disabled={loading || !approvalData.requestReason}
-                >
-                  Request Manager Approval
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      {/* 10.2 Transfer Documents to Billing Clerk */}
-      <div className="row mt-4">
-        <div className="col-md-12">
-          <h5>10.2 Transfer Documents to Billing Clerk</h5>
-          <p>Transfer documents to Billing Clerk</p>
-          
-          {serviceOrders.filter(order => order.status === 'For Payment').map(order => (
-            <div key={order._id} className="card mt-3">
-              <div className="card-body">
-                <h6>Service Order: {order._id}</h6>
-                <p>Customer: {order.customerId?.name}</p>
-                <p>Vehicle: {order.vehicleId?.plateNo}</p>
-                
-                <div className="form-group">
-                  <label>Documents Transferred:</label>
-                  <div className="form-check">
-                    <input className="form-check-input" type="checkbox" value="Service Order" id="doc1" />
-                    <label className="form-check-label" htmlFor="doc1">Service Order</label>
-                  </div>
-                  <div className="form-check">
-                    <input className="form-check-input" type="checkbox" value="Billing" id="doc2" />
-                    <label className="form-check-label" htmlFor="doc2">Billing</label>
-                  </div>
-                  <div className="form-check">
-                    <input className="form-check-input" type="checkbox" value="Vehicle Report Card" id="doc3" />
-                    <label className="form-check-label" htmlFor="doc3">Vehicle Report Card</label>
-                  </div>
-                </div>
-                
-                <div className="form-group">
-                  <label>Transfer Notes:</label>
-                  <textarea
-                    className="form-control"
-                    placeholder="Transfer notes"
-                    value={transferData.transferNotes}
-                    onChange={(e) => setTransferData({
-                      ...transferData,
-                      transferNotes: e.target.value
-                    })}
-                  />
-                </div>
-                
-                <button
-                  className="btn btn-info"
-                  onClick={() => handleTransferDocumentsToBilling(order._id)}
-                  disabled={loading}
-                >
-                  Transfer Documents to Billing
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      {/* 10.3 Transfer Gatepass to Security */}
-      <div className="row mt-4">
-        <div className="col-md-12">
-          <h5>10.3 Transfer Gatepass to Security</h5>
-          <p>Transfer gatepass to Security for final processing</p>
-          
-          {serviceOrders.filter(order => order.status === 'For Payment').map(order => (
-            <div key={order._id} className="card mt-3">
-              <div className="card-body">
-                <h6>Service Order: {order._id}</h6>
-                <p>Customer: {order.customerId?.name}</p>
-                <p>Vehicle: {order.vehicleId?.plateNo}</p>
-                
-                <div className="form-group">
-                  <label>Gatepass ID:</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Gatepass ID"
-                    value={transferData.gatepassId || ''}
-                    onChange={(e) => setTransferData({
-                      ...transferData,
-                      gatepassId: e.target.value
-                    })}
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Transfer Notes:</label>
-                  <textarea
-                    className="form-control"
-                    placeholder="Transfer notes for security"
-                    value={transferData.transferNotes}
-                    onChange={(e) => setTransferData({
-                      ...transferData,
-                      transferNotes: e.target.value
-                    })}
-                  />
-                </div>
-                
-                <button
-                  className="btn btn-warning"
-                  onClick={() => handleTransferGatepassToSecurity(order._id, transferData.gatepassId)}
-                  disabled={loading || !transferData.gatepassId}
-                >
-                  Transfer Gatepass to Security
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      {/* 10.4 Request Car Jockey for Final Drive-out */}
-      <div className="row mt-4">
-        <div className="col-md-12">
-          <h5>10.4 Request Car Jockey for Final Drive-out</h5>
-          <p>Request car jockey for final vehicle drive-out</p>
-          
-          {serviceOrders.filter(order => order.status === 'For Payment').map(order => (
-            <div key={order._id} className="card mt-3">
-              <div className="card-body">
-                <h6>Service Order: {order._id}</h6>
-                <p>Customer: {order.customerId?.name}</p>
-                <p>Vehicle: {order.vehicleId?.plateNo}</p>
-                
-                <div className="form-group">
-                  <label>Car Jockey Instructions:</label>
-                  <textarea
-                    className="form-control"
-                    placeholder="Special instructions for car jockey"
-                    value={jockeyData.jockeyInstructions}
-                    onChange={(e) => setJockeyData({
-                      ...jockeyData,
-                      jockeyInstructions: e.target.value
-                    })}
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Estimated Pickup Time:</label>
-                  <input
-                    type="datetime-local"
-                    className="form-control"
-                    value={jockeyData.estimatedPickupTime}
-                    onChange={(e) => setJockeyData({
-                      ...jockeyData,
-                      estimatedPickupTime: e.target.value
-                    })}
-                  />
-                </div>
-                
-                <button
-                  className="btn btn-success"
-                  onClick={() => handleRequestCarJockey(order._id)}
-                  disabled={loading || !jockeyData.jockeyInstructions}
-                >
-                  Request Car Jockey
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      {/* Final Release Status */}
-      {finalReleaseStatus && (
-        <div className="row mt-4">
-          <div className="col-md-12">
-            <h5>Final Release Status</h5>
-            <div className="card mt-3">
-              <div className="card-body">
-                <h6>Overall Status: {finalReleaseStatus.finalReleaseStatus?.overallStatus}</h6>
-                <ul>
-                  <li>Manager Approval: {finalReleaseStatus.finalReleaseStatus?.managerApprovalStatus}</li>
-                  <li>Documents Transferred: {finalReleaseStatus.finalReleaseStatus?.documentsTransferred ? 'Yes' : 'No'}</li>
-                  <li>Gatepass Transferred: {finalReleaseStatus.finalReleaseStatus?.gatepassTransferred ? 'Yes' : 'No'}</li>
-                  <li>Car Jockey Requested: {finalReleaseStatus.finalReleaseStatus?.carJockeyRequested ? 'Yes' : 'No'}</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <div className="container mt-4">
       <h1>Service Advisor Dashboard - Customer Arrival Module</h1>
@@ -1090,14 +743,6 @@ const ServiceAdvisorDashboard = ({ token }) => {
             8. Billing Preparation
           </button>
         </li>
-        <li className="nav-item">
-          <button
-            className={`nav-link ${activeTab === 'finalRelease' ? 'active' : ''}`}
-            onClick={() => setActiveTab('finalRelease')}
-          >
-            10. Final Release
-          </button>
-        </li>
       </ul>
 
       <div className="tab-content mt-3">
@@ -1107,7 +752,6 @@ const ServiceAdvisorDashboard = ({ token }) => {
         {activeTab === 'creation' && renderServiceOrderCreationTab()}
         {activeTab === 'printing' && renderDocumentPrintingTab()}
         {activeTab === 'billing' && renderBillingTab()}
-        {activeTab === 'finalRelease' && renderFinalReleaseTab()}
       </div>
 
       {loading && (

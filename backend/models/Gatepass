@@ -1,0 +1,199 @@
+const mongoose = require('mongoose');
+
+const gatepassSchema = new mongoose.Schema({
+  serviceOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceOrder', required: true },
+  billingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Billing' },
+  
+  // Gatepass identification
+  gatepassNumber: { type: String, required: true, unique: true },
+  issueDate: { type: Date, default: Date.now },
+  expiryDate: { type: Date },
+  
+  // Vehicle information
+  vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', required: true },
+  vehiclePlateNumber: { type: String, required: true },
+  vehicleModel: { type: String },
+  vehicleColor: { type: String },
+  
+  // Customer information
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
+  customerName: { type: String, required: true },
+  customerContact: { type: String },
+  
+  // Service details
+  serviceAdvisorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  technicianId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  totalAmount: { type: Number, required: true },
+  
+  // Payment status
+  paymentStatus: { 
+    type: String, 
+    enum: ['Pending Payment', 'Paid', 'Charge Account Pending', 'Warranty'], 
+    default: 'Pending Payment' 
+  },
+  paymentMethod: { type: String },
+  paymentReference: { type: String },
+  
+  // Enhanced Digital signatures with validation
+  cashierSignature: {
+    cashierId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    cashierName: { type: String, required: true },
+    signatureData: { type: String }, // Digital signature or initials
+    signedAt: { type: Date, default: Date.now },
+    isRequired: { type: Boolean, default: true },
+    isValidated: { type: Boolean, default: false },
+    validatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    validatedAt: { type: Date }
+  },
+  
+  accountingSignature: {
+    accountantId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    accountantName: { type: String, required: true },
+    signatureData: { type: String },
+    signedAt: { type: Date, default: Date.now },
+    isRequired: { type: Boolean, default: true },
+    isValidated: { type: Boolean, default: false },
+    validatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    validatedAt: { type: Date }
+  },
+  
+  warrantySignature: {
+    warrantyOfficerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    warrantyOfficerName: { type: String },
+    signatureData: { type: String },
+    signedAt: { type: Date },
+    isRequired: { type: Boolean, default: false }, // Only required for warranty claims
+    isValidated: { type: Boolean, default: false },
+    validatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    validatedAt: { type: Date }
+  },
+  
+  serviceManagerSignature: {
+    managerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    managerName: { type: String, required: true },
+    signatureData: { type: String },
+    signedAt: { type: Date, default: Date.now },
+    isRequired: { type: Boolean, default: true },
+    isValidated: { type: Boolean, default: false },
+    validatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    validatedAt: { type: Date }
+  },
+  
+  securitySignature: {
+    securityGuardId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    securityGuardName: { type: String },
+    signatureData: { type: String },
+    signedAt: { type: Date }
+  },
+  
+  customerAcknowledgment: {
+    customerSignature: { type: String }, // Customer digital signature
+    acknowledgedAt: { type: Date }
+  },
+  
+  // Exit tracking
+  exitTime: { type: Date },
+  exitAuthorizedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  
+  // Document status
+  documentStatus: { 
+    type: String, 
+    enum: ['Draft', 'Pending Signature', 'Signed', 'Completed', 'Cancelled'], 
+    default: 'Draft' 
+  },
+  
+  // Gatepass type
+  gatepassType: { 
+    type: String, 
+    enum: ['Service Completion', 'Warranty Claim', 'Parts Pickup', 'Vehicle Release'], 
+    default: 'Service Completion' 
+  },
+  
+  // Additional services or notes
+  additionalServices: [{ type: String }],
+  specialInstructions: { type: String },
+  cashierNotes: { type: String },
+  securityNotes: { type: String },
+  
+  // Return to Service Advisor
+  returnedToSA: { type: Boolean, default: false },
+  returnedAt: { type: Date },
+  saAcknowledgment: {
+    acknowledgedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    acknowledgedAt: { type: Date }
+  },
+  
+  // Validity and access control
+  isValid: { type: Boolean, default: true },
+  accessLevel: { type: String, default: 'Standard' },
+  
+  // Vehicle release tracking
+  vehicleReleased: { type: Boolean, default: false },
+  vehicleReleasedAt: { type: Date },
+  vehicleReleasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  
+  // Audit trail
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  lastModifiedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+// Auto-generate gatepass number
+gatepassSchema.pre('save', async function(next) {
+  if (this.isNew && !this.gatepassNumber) {
+    const year = new Date().getFullYear();
+    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const day = String(new Date().getDate()).padStart(2, '0');
+    const count = await this.constructor.countDocuments({
+      createdAt: {
+        $gte: new Date(year, new Date().getMonth(), new Date().getDate()),
+        $lt: new Date(year, new Date().getMonth(), new Date().getDate() + 1)
+      }
+    });
+    this.gatepassNumber = `GP-${year}${month}${day}-${String(count + 1).padStart(3, '0')}`;
+  }
+  next();
+});
+
+// Set expiry date (24 hours from issue)
+gatepassSchema.pre('save', function(next) {
+  if (this.isNew && !this.expiryDate) {
+    this.expiryDate = new Date(this.issueDate.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+  }
+  next();
+});
+
+// Method to check if all required signatures are present and validated
+gatepassSchema.methods.checkSignaturesValidation = function() {
+  const requiredSignatures = [
+    this.cashierSignature,
+    this.accountingSignature,
+    this.serviceManagerSignature
+  ];
+  
+  // Add warranty signature if required
+  if (this.warrantySignature && this.warrantySignature.isRequired) {
+    requiredSignatures.push(this.warrantySignature);
+  }
+  
+  return requiredSignatures.every(sig => sig && sig.isValidated === true);
+};
+
+// Method to log vehicle release
+gatepassSchema.methods.logVehicleRelease = function(userId) {
+  this.vehicleReleased = true;
+  this.vehicleReleasedAt = new Date();
+  this.vehicleReleasedBy = userId;
+  this.documentStatus = 'Completed';
+};
+
+// Index for efficient queries
+gatepassSchema.index({ serviceOrderId: 1 });
+gatepassSchema.index({ gatepassNumber: 1 });
+gatepassSchema.index({ vehiclePlateNumber: 1 });
+gatepassSchema.index({ paymentStatus: 1 });
+gatepassSchema.index({ documentStatus: 1 });
+gatepassSchema.index({ issueDate: -1 });
+gatepassSchema.index({ vehicleReleased: 1 });
+
+module.exports = mongoose.model('Gatepass', gatepassSchema);

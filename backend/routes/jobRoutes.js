@@ -9,7 +9,9 @@ const {
   clockOutTechnician, 
   getTechnicianAssignments, 
   getLaborTracking, 
-  completeAssignment 
+  completeAssignment,
+  returnCompletedServiceOrder,
+  getCompletedAssignments 
 } = require('../controllers/jobController');
 
 router.use(authenticate);
@@ -37,5 +39,11 @@ router.get('/assignments/:assignmentId/labor-tracking', requireRole(['JobControl
 
 // Complete assignment
 router.put('/assignments/:assignmentId/complete', requireRole('JobController'), completeAssignment);
+
+// Get completed assignments ready for wrap-up
+router.get('/assignments/completed', requireRole('JobController'), getCompletedAssignments);
+
+// Return completed service order to Service Advisor
+router.put('/service-orders/:serviceOrderId/return-to-sa', requireRole('JobController'), returnCompletedServiceOrder);
 
 module.exports = router;

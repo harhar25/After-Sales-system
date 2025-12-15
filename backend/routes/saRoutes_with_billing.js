@@ -37,14 +37,7 @@ const {
   printServiceBilling,
   
   // 8.2 Customer Handoff to Cashier
-  markForPayment,
-  
-  // 10. Final Release - Service Advisor
-  requestManagerApproval,
-  transferDocumentsToBilling,
-  transferGatepassToSecurity,
-  requestCarJockey,
-  getFinalReleaseStatus
+  markForPayment
 } = require('../controllers/saController');
 
 router.use(authenticate);
@@ -85,21 +78,5 @@ router.post('/billing/:billingId/print', requireRole('SA'), printServiceBilling)
 
 // 8.2 Customer Handoff to Cashier
 router.put('/service-orders/:serviceOrderId/mark-for-payment', requireRole('SA'), markForPayment);
-
-// 10. Final Release - Service Advisor routes
-// 10.1 Request Manager Approval for Gatepass
-router.post('/service-orders/:serviceOrderId/request-manager-approval', requireRole('SA'), requestManagerApproval);
-
-// 10.2 Transfer Documents to Billing Clerk
-router.put('/service-orders/:serviceOrderId/transfer-documents', requireRole('SA'), transferDocumentsToBilling);
-
-// 10.3 Transfer Gatepass to Security
-router.put('/service-orders/:serviceOrderId/transfer-gatepass', requireRole('SA'), transferGatepassToSecurity);
-
-// 10.4 Request Car Jockey for Final Drive-out
-router.post('/service-orders/:serviceOrderId/request-car-jockey', requireRole('SA'), requestCarJockey);
-
-// Get Final Release Status
-router.get('/service-orders/:serviceOrderId/final-release-status', requireRole('SA'), getFinalReleaseStatus);
 
 module.exports = router;
