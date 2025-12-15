@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['CRO', 'SA', 'Technician', 'Foreman', 'Cashier', 'Security'], required: true },
+  role: { type: String, enum: ['CRO', 'SA', 'Technician', 'Foreman', 'Cashier', 'Security', 'JobController'], required: true },
   permissions: [{ type: String }]
 }, { timestamps: true });
 
