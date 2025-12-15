@@ -1,0 +1,10 @@
+const mongoose = require('mongoose');
+
+const vehicleSchema = new mongoose.Schema({
+  plateNo: { type: String, required: true },
+  makeModel: { type: String, required: true },
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
+  serviceHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ServiceOrder' }]
+}, { timestamps: true });
+
+module.exports = mongoose.model('Vehicle', vehicleSchema);
